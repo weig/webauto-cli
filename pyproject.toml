@@ -1,0 +1,34 @@
+[project]
+name = "webauto"
+version = "0.1.0"
+description = "Standalone webauto library + webauto-cli runner."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "weig" }]
+dependencies = [
+    "seleniumbase>=4.27",
+    "cryptography>=42",
+]
+
+[project.scripts]
+webauto-cli = "webauto.cli.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["webauto"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Disable SeleniumBase's pytest plugin — its --timeout hijack conflicts with
+# our subprocess-based tests, and we don't use SB's own test runner.
+addopts = "-ra -p no:seleniumbase -p no:sb_pytest_plugin"

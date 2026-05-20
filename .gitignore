@@ -1,0 +1,68 @@
+# --- Python build artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
+dist/
+wheels/
+*.whl
+
+# --- Virtualenvs / package managers ---
+.venv/
+venv/
+env/
+.python-version
+
+# --- uv ---
+# uv.lock IS checked in by convention — it pins the resolved dep graph for
+# reproducible installs. (Comment the next line if you want to ignore it.)
+# uv.lock
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# --- Type checkers ---
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pyright/
+.ruff_cache/
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Project-local secrets / runtime data ---
+.schwab.env*
+.env
+.env.*
+!.env.example
+
+# Persistent browser profile (not source-controllable; per-user device cookies)
+.cache/
+
+# Auth debug dumps (when DEBUG=1 captures page sources during a failed flow)
+auth-debug/
+
+# SeleniumBase scratch directory (chromedriver download lock + temp artifacts)
+downloaded_files/
+
+# Screenshots / page dumps written by example scripts during debugging
+screenshots/
+saved_screenshots/
+
+# --- Claude / agent harnesses ---
+.claude/
