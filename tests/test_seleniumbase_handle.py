@@ -97,3 +97,65 @@ class TestScoreWindowUrlWithTarget:
     def test_target_none_falls_back_to_scheme_scoring(self) -> None:
         assert _score_window_url("https://x/", None) == 3
         assert _score_window_url("about:blank", None) == 2
+
+
+class TestCloseParksOnBlank:
+    """`close()` must navigate away from the OAuth callback URL before
+    quitting, so the persistent profile doesn't restore (and replay) a
+    stale `?code=...` callback on the next launch."""
+
+    def _make_handle(self, driver):
+        # Bypass __init__ (it spins up a real Chrome); inject a fake
+        # driver and the headless flag the method reads.
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+        h = SeleniumBaseHandle.__new__(SeleniumBaseHandle)
+        h._driver = driver
+        h._headless = True
+        return h
+
+    def test_navigates_to_blank_then_quits(self) -> None:
+        calls: list[tuple[str, str]] = []
+
+        class _FakeDriver:
+            def default_get(self, url):
+                calls.append(("default_get", url))
+            def get(self, url):
+                calls.append(("get", url))
+            def quit(self):
+                calls.append(("quit", ""))
+
+        self._make_handle(_FakeDriver()).close()
+
+        assert ("default_get", "about:blank") in calls
+        assert ("quit", "") in calls
+        # blank navigation must happen BEFORE quit
+        assert calls.index(("default_get", "about:blank")) < calls.index(("quit", ""))
+
+    def test_quit_still_runs_if_blank_nav_raises(self) -> None:
+        calls: list[str] = []
+
+        class _AngryDriver:
+            def default_get(self, url):
+                raise RuntimeError("nav boom")
+            def get(self, url):
+                raise RuntimeError("nav boom")
+            def quit(self):
+                calls.append("quit")
+
+        # close() must swallow the nav failure and still quit.
+        self._make_handle(_AngryDriver()).close()
+        assert calls == ["quit"]
+
+    def test_falls_back_to_get_when_no_default_get(self) -> None:
+        calls: list[tuple[str, str]] = []
+
+        class _PlainDriver:
+            # No default_get attribute → close() falls back to .get
+            def get(self, url):
+                calls.append(("get", url))
+            def quit(self):
+                calls.append(("quit", ""))
+
+        self._make_handle(_PlainDriver()).close()
+        assert ("get", "about:blank") in calls
+        assert ("quit", "") in calls

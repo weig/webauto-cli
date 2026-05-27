@@ -476,6 +476,20 @@ class SeleniumBaseHandle:
             return False
 
     def close(self) -> None:
+        # Park on about:blank BEFORE quitting. The persistent profile
+        # (kept on purpose, so the device stays trusted and Schwab
+        # doesn't re-trigger mobile verification) restores the last tab
+        # on next launch. If that tab is an OAuth callback URL — it
+        # carries `?code=...` — the browser re-requests it on startup
+        # and replays a *stale* code to the relay before the new auth
+        # flow runs, breaking auth with a state mismatch. Navigating to
+        # about:blank leaves the cookie jar untouched while guaranteeing
+        # nothing sensitive sits in the restored tab.
+        try:
+            nav = getattr(self._driver, "default_get", None) or self._driver.get
+            nav("about:blank")
+        except Exception:
+            pass
         try:
             self._driver.quit()
         except Exception:
