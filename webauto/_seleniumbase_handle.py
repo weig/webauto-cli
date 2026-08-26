@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from webauto._chrome_bootstrap import resolve_chrome_version
+from webauto._chrome_clone import sweep_chrome_code_sign_clones
 
 
 def _truthy(value: Optional[str]) -> bool:
@@ -166,6 +167,15 @@ class SeleniumBaseHandle:
 
     def __init__(self) -> None:
         from seleniumbase import Driver  # heavy; import lazily
+
+        # Sweep any Chrome code-sign clones stranded by prior runs BEFORE
+        # launching — this heals whatever a SIGKILLed session left behind,
+        # regardless of how it died (the caller terminates our process group,
+        # so Chrome's own cleanup helper never runs). Unbounded, these dir
+        # entries eventually stall macOS boot. Best-effort, never raises.
+        swept = sweep_chrome_code_sign_clones()
+        if swept:
+            _dlog(f"swept {swept} orphaned Chrome code-sign clone(s) at launch")
 
         chrome_version = resolve_chrome_version()
         # Headless by default. Set HEADLESS=0 (or false/no/off) for a visible
@@ -494,6 +504,10 @@ class SeleniumBaseHandle:
             self._driver.quit()
         except Exception:
             pass
+        # Clear this run's clone promptly on a clean exit. The launch-time
+        # sweep is the SIGKILL-proof backstop; this just avoids leaving one
+        # sitting around between runs.
+        sweep_chrome_code_sign_clones()
 
     # ------------------------------------------------------------------
     # Schwab-specific helpers exposed for `custom(...)` steps that need
