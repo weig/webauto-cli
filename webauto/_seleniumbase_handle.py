@@ -8,6 +8,7 @@ of truth for *why* each trick is here; the comments below summarize.
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 import socket
@@ -146,6 +147,39 @@ def _score_window_url(url: str, target_url: Optional[str] = None) -> int:
     if url.startswith("chrome://"):
         return 1
     return 0
+
+
+def _frame_aware(method):
+    """Run a selector method inside the iframe named by a "<frame> >> <element>" selector.
+
+    Switches into the single matching iframe for the duration of the call and
+    always switches back. A missing frame makes count() 0 and is_visible()
+    False; other methods raise LookupError. More than one matching frame raises.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self, selector, *args, **kwargs):
+        from webauto._selectors import split_frame
+
+        frame, inner = split_frame(selector)
+        if frame is None:
+            return method(self, selector, *args, **kwargs)
+        frames = self._find_elements(frame)
+        if len(frames) > 1:
+            raise ValueError(f"{len(frames)} frames match {frame!r}; expected one")
+        if not frames:
+            if method.__name__ == "count":
+                return 0
+            if method.__name__ == "is_visible":
+                return False
+            raise LookupError(f"no frame matches {frame!r}")
+        self._driver.switch_to.frame(frames[0])
+        try:
+            return method(self, inner, *args, **kwargs)
+        finally:
+            self._driver.switch_to.default_content()
+
+    return wrapper
 
 
 def selenium_key(key: str) -> str:
@@ -332,6 +366,7 @@ class SeleniumBaseHandle:
             except Exception as e:
                 _dlog(f"goto complete: current_url unavailable ({e!r})")
 
+    @_frame_aware
     def fill(self, selector: str, value: str) -> None:
         """Set an input's value via JS + event dispatch.
 
@@ -363,6 +398,7 @@ class SeleniumBaseHandle:
             value,
         )
 
+    @_frame_aware
     def click(self, selector: str) -> None:
         """Click a button with escalating strategies.
 
@@ -432,12 +468,15 @@ class SeleniumBaseHandle:
             checked,
         )
 
+    @_frame_aware
     def check(self, selector: str) -> None:
         self._set_checkbox(selector, True)
 
+    @_frame_aware
     def uncheck(self, selector: str) -> None:
         self._set_checkbox(selector, False)
 
+    @_frame_aware
     def check_all(self, selector: str) -> None:
         elements = self._find_elements(selector)
         for el in elements:
@@ -454,6 +493,7 @@ class SeleniumBaseHandle:
                 el,
             )
 
+    @_frame_aware
     def wait_for_selector(self, selector: str, timeout: float = 30.0) -> None:
         """Wait for `selector` to be present in the DOM (not just visible).
 
@@ -511,6 +551,7 @@ class SeleniumBaseHandle:
     def screenshot(self, path: str) -> None:
         self._driver.save_screenshot(path)
 
+    @_frame_aware
     def is_visible(self, selector: str) -> bool:
         try:
             els = self._find_elements(selector)
@@ -518,6 +559,7 @@ class SeleniumBaseHandle:
         except Exception:
             return False
 
+    @_frame_aware
     def count(self, selector: str) -> int:
         return len(self._find_elements(selector))
 
