@@ -168,7 +168,7 @@ def _frame_aware(method):
         if len(frames) > 1:
             raise ValueError(f"{len(frames)} frames match {frame!r}; expected one")
         if not frames:
-            if method.__name__ == "count":
+            if method.__name__ in ("count", "count_visible"):
                 return 0
             if method.__name__ == "is_visible":
                 return False
@@ -573,6 +573,10 @@ class SeleniumBaseHandle:
     @_frame_aware
     def count(self, selector: str) -> int:
         return len(self._find_elements(selector))
+
+    @_frame_aware
+    def count_visible(self, selector: str) -> int:
+        return sum(1 for el in self._find_elements(selector) if el.is_displayed())
 
     def close(self) -> None:
         # Park on about:blank BEFORE quitting. The persistent profile

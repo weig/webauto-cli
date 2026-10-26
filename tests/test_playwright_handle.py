@@ -142,3 +142,19 @@ def test_click_position_hits_the_given_point(tmp_path, monkeypatch) -> None:
         pw.wait_for_url("#/div", timeout=5)
     finally:
         pw.close()
+
+
+def test_count_visible_ignores_hidden_elements(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HEADLESS", "1")
+    monkeypatch.delenv("WEBAUTO_CDP_URL", raising=False)
+    from webauto._playwright_handle import PlaywrightHandle
+
+    page = tmp_path / "hidden.html"
+    page.write_text('<button class="b">shown</button><button class="b" style="display:none">hidden</button>')
+    pw = PlaywrightHandle()
+    try:
+        pw.goto(page.as_uri())
+        assert pw.count("button.b") == 2
+        assert pw.count_visible("button.b") == 1
+    finally:
+        pw.close()

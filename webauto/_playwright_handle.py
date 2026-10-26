@@ -130,6 +130,9 @@ class PlaywrightHandle:
     def count(self, selector: str) -> int:
         return self._locator(selector).count()
 
+    def count_visible(self, selector: str) -> int:
+        return self._locator(selector).filter(visible=True).count()
+
     def close(self) -> None:
         try:
             if self._owns_browser:

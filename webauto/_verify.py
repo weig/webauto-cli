@@ -96,15 +96,16 @@ def verify_all(
 
 
 def click_if_unique(selector: StrOrLazy) -> Step:
-    """Click only when `selector` matches exactly one element; otherwise do nothing.
+    """Click only when `selector` matches exactly one visible element; otherwise do nothing.
 
     Meant for cleanup (e.g. logging out after a failure) where clicking the
-    wrong thing is worse than not clicking at all.
+    wrong thing is worse than not clicking at all. Hidden matches (a closed
+    dialog still in the DOM) are skipped instead of waited on.
     """
 
     def step(handle: BrowserHandle) -> None:
         resolved = _resolve(selector)
-        if handle.count(resolved) == 1:
+        if handle.count(resolved) == 1 and handle.count_visible(resolved) == 1:
             handle.click(resolved)
 
     step.__name__ = f"click_if_unique({selector!r})"

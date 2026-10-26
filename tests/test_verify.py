@@ -93,6 +93,14 @@ class TestClickIfUnique:
         assert click_if_unique("#logout")(handle) is None
         assert handle.calls == [("click", "#logout")]
 
+    def test_skips_a_present_but_hidden_element(self, handle) -> None:
+        handle.visible.add("#close")
+        handle.hidden.add("#close")
+
+        click_if_unique("#close")(handle)
+
+        assert handle.calls == []
+
     @pytest.mark.parametrize("count", [0, 2])
     def test_skips_otherwise(self, handle, count) -> None:
         handle.counts["#logout"] = count

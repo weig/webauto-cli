@@ -322,3 +322,24 @@ class TestSeleniumClickPosition:
         handle.click("#icon", position=(20, 5))
 
         assert moves == [(0, -25), "click", "perform"]
+
+
+class TestSeleniumCountVisible:
+    def test_counts_only_displayed_elements(self) -> None:
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+
+        class El:
+            def __init__(self, shown):
+                self.shown = shown
+
+            def is_displayed(self):
+                return self.shown
+
+        class FakeDriver:
+            def find_elements(self, by, value):
+                return [El(True), El(False), El(True)]
+
+        handle = object.__new__(SeleniumBaseHandle)
+        handle._driver = FakeDriver()
+
+        assert handle.count_visible("button") == 2
