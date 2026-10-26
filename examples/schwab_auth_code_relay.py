@@ -224,4 +224,5 @@ if __name__ == "__main__":
     # `notification=` is optional — init() reads AUTOMATION_NOTIFICATION_*
     # from env if present, else runs in no-channel mode (notify() errors,
     # done() works). Compatible with both `webauto-cli` and `--no-notify`.
-    init(url=action.params.URL, action=action)
+    # Schwab's bot checks need SeleniumBase's UC mode; Playwright is the default.
+    init(url=action.params.URL, action=action, browser="seleniumbase")

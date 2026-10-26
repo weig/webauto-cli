@@ -21,6 +21,9 @@ class MockBrowserHandle:
         self.visible: set[str] = set()
         # Selectors considered "selected" (for check/uncheck idempotency).
         self.selected: set[str] = set()
+        # Match counts for count(); unlisted selectors fall back to
+        # 1 if visible else 0.
+        self.counts: dict[str, int] = {}
         # Pre-scripted URL transitions: when this step index runs (0-based),
         # set self._url to the corresponding entry. None = no change.
         self.url_after_step: list[str | None] = []
@@ -83,6 +86,9 @@ class MockBrowserHandle:
 
     def is_visible(self, selector: str) -> bool:
         return selector in self.visible
+
+    def count(self, selector: str) -> int:
+        return self.counts.get(selector, 1 if selector in self.visible else 0)
 
     def close(self) -> None:
         self.calls.append(("close",))

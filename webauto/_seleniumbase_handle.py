@@ -265,12 +265,14 @@ class SeleniumBaseHandle:
             pass
 
     def _find_elements(self, selector: str) -> list:
-        """Find elements by CSS or playwright-style `text=` selector."""
+        """Find elements by XPath ("/" or "(" prefix), `text=` substring, or CSS."""
         from selenium.webdriver.common.by import By
         if selector.startswith("text="):
             text = selector[len("text="):]
             xp = f"//*[contains(normalize-space(.), {repr(text)})]"
             return self._driver.find_elements(By.XPATH, xp)
+        if selector.startswith(("/", "(")):
+            return self._driver.find_elements(By.XPATH, selector)
         return self._driver.find_elements(By.CSS_SELECTOR, selector)
 
     # ------------------------------------------------------------------
@@ -484,6 +486,9 @@ class SeleniumBaseHandle:
             return bool(els)
         except Exception:
             return False
+
+    def count(self, selector: str) -> int:
+        return len(self._find_elements(selector))
 
     def close(self) -> None:
         # Park on about:blank BEFORE quitting. The persistent profile

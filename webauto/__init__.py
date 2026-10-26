@@ -60,6 +60,17 @@ from webauto._factories import (
 # init() and notify() are wired up in Task F (depend on _notification_client + _runner).
 from webauto._notify import done, notify
 from webauto._entry import init
+from webauto._verify import (
+    CheckResult,
+    Expectation,
+    UnexpectedPage,
+    VerificationFailed,
+    click_if_unique,
+    expect,
+    unexpected_page,
+    verify_all,
+)
+from webauto._site import Site, SiteError, load_site, run_site
 
 __version__ = "0.1.0"
 
@@ -93,4 +104,18 @@ __all__ = [
     "wait_visible",
     # URL helper
     "parse_url",
+    # Verification
+    "CheckResult",
+    "Expectation",
+    "UnexpectedPage",
+    "VerificationFailed",
+    "click_if_unique",
+    "expect",
+    "unexpected_page",
+    "verify_all",
+    # Declarative sites
+    "Site",
+    "SiteError",
+    "load_site",
+    "run_site",
 ]

@@ -242,4 +242,6 @@ if __name__ == "__main__":
             "endpoint": os.environ["AUTOMATION_NOTIFICATION_ENDPOINT"],
         },
         action=action,
+        # Schwab's bot checks need SeleniumBase's UC mode; Playwright is the default.
+        browser="seleniumbase",
     )
