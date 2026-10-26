@@ -112,6 +112,13 @@ class TestRun:
         assert handle.calls[-1] == ("close",)
         assert any(c[0] == "screenshot" and str(tmp_path) in c[1] for c in handle.calls)
 
+    def test_start_url_override(self, site_file, handle) -> None:
+        with pytest.raises(UnexpectedPage):
+            run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
+                     start_url="https://other/site")
+
+        assert handle.calls[0] == ("goto", "https://other/site")
+
     def test_unknown_page_fails_via_catch_all(self, site_file, handle) -> None:
         handle.url = "https://h/password-expired"
 

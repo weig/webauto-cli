@@ -166,18 +166,20 @@ def run_site(
     browser: Optional[str] = None,
     screenshot_dir: Optional[Union[str, Path]] = None,
     navigate: bool = True,
+    start_url: Optional[str] = None,
 ) -> None:
     """Load a site file and drive it. Raises VerificationFailed / UnexpectedPage on mismatch.
 
-    `navigate=False` starts from the page the handle is already on instead of
-    `start_url` (useful when attaching to a browser someone has open).
+    `start_url` replaces the file's start_url (e.g. to check that a recorded
+    site refuses a different one). `navigate=False` starts from the page the
+    handle is already on (useful when attaching to a browser someone has open).
     """
     site = load_site(path)
     shots = Path(screenshot_dir) if screenshot_dir else None
     if shots:
         shots.mkdir(parents=True, exist_ok=True)
     action = build_action(site, params, shots)
-    url = site.start_url
+    url = start_url or site.start_url
     if not navigate:
         if handle is None:
             raise SiteError("navigate=False needs an explicit handle")
