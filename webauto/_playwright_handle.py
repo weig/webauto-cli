@@ -80,8 +80,11 @@ class PlaywrightHandle:
     def fill(self, selector: str, value: str) -> None:
         self._locator(selector).fill(value)
 
-    def click(self, selector: str) -> None:
-        self._locator(selector).click()
+    def click(self, selector: str, position: Optional[tuple] = None) -> None:
+        if position is None:
+            self._locator(selector).click()
+        else:
+            self._locator(selector).click(position={"x": position[0], "y": position[1]})
 
     def check(self, selector: str) -> None:
         self._locator(selector).check()

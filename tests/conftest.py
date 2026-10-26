@@ -49,8 +49,8 @@ class MockBrowserHandle:
         self.calls.append(("fill", selector, value))
         self._advance()
 
-    def click(self, selector: str) -> None:
-        self.calls.append(("click", selector))
+    def click(self, selector: str, position=None) -> None:
+        self.calls.append(("click", selector) if position is None else ("click", selector, position))
         self._advance()
 
     def check(self, selector: str) -> None:

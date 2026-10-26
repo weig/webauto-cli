@@ -157,7 +157,8 @@ def _builders(
     return {
         "verify": lambda: _verify_step(arg, label, screenshot_dir, verify_timeout),
         "fill": lambda: f.fill(arg["selector"], _value(arg["value"], params)),
-        "click": lambda: f.click(arg),
+        "click": lambda: (f.click(arg) if isinstance(arg, str)
+                          else f.click(arg["selector"], position=tuple(arg["position"]) if arg.get("position") else None)),
         "click_if_unique": lambda: click_if_unique(arg),
         "check": lambda: f.check(arg),
         "uncheck": lambda: f.uncheck(arg),

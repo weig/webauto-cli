@@ -136,3 +136,19 @@ class TestPress:
         press("Escape")(handle)
 
         assert handle.calls == [("press", "Escape")]
+
+
+class TestClickPosition:
+    def test_position_is_passed_through(self, handle) -> None:
+        from webauto._factories import click
+
+        click("#icon", position=(11, 8))(handle)
+
+        assert handle.calls == [("click", "#icon", (11, 8))]
+
+    def test_without_position_is_unchanged(self, handle) -> None:
+        from webauto._factories import click
+
+        click("#icon")(handle)
+
+        assert handle.calls == [("click", "#icon")]

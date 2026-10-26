@@ -285,3 +285,40 @@ class TestSeleniumFrameSelectors:
 
         with pytest.raises(ValueError, match="2 frames"):
             handle.count("//iframe >> //input")
+
+
+class TestSeleniumClickPosition:
+    def test_offset_is_converted_from_top_left_to_centre(self, monkeypatch) -> None:
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+
+        moves = []
+
+        class FakeEl:
+            size = {"width": 40, "height": 60}
+
+        class FakeChains:
+            def __init__(self, driver) -> None:
+                pass
+
+            def move_to_element_with_offset(self, el, x, y):
+                moves.append((x, y))
+                return self
+
+            def click(self):
+                moves.append("click")
+                return self
+
+            def perform(self) -> None:
+                moves.append("perform")
+
+        class FakeDriver:
+            def find_elements(self, by, value):
+                return [FakeEl()]
+
+        monkeypatch.setattr("selenium.webdriver.common.action_chains.ActionChains", FakeChains)
+        handle = object.__new__(SeleniumBaseHandle)
+        handle._driver = FakeDriver()
+
+        handle.click("#icon", position=(20, 5))
+
+        assert moves == [(0, -25), "click", "perform"]

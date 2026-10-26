@@ -399,8 +399,12 @@ class SeleniumBaseHandle:
         )
 
     @_frame_aware
-    def click(self, selector: str) -> None:
+    def click(self, selector: str, position: Optional[tuple] = None) -> None:
         """Click a button with escalating strategies.
+
+        With `position=(x, y)` (CSS pixels from the element's top-left) a single
+        real mouse click is sent to that point instead; there is no JS fallback,
+        because a synthetic click would not land on that point.
 
         Some Schwab controls (the Informed Consent Accept button) live
         inside a web component's shadow root; native click works but
@@ -412,6 +416,13 @@ class SeleniumBaseHandle:
         if not els:
             raise AssertionError(f"click: selector {selector!r} not present")
         el = els[0]
+        if position is not None:
+            from selenium.webdriver.common.action_chains import ActionChains
+            # Selenium 4 offsets are measured from the element's centre.
+            dx = position[0] - el.size["width"] / 2
+            dy = position[1] - el.size["height"] / 2
+            ActionChains(self._driver).move_to_element_with_offset(el, dx, dy).click().perform()
+            return
         try:
             self._driver.execute_script(
                 "arguments[0].scrollIntoView({block:'center'});", el

@@ -117,3 +117,28 @@ def test_frame_selector_fill_and_click(framed) -> None:
 
     value = framed.evaluate("() => document.getElementById('inner').contentDocument.getElementById('x').value")
     assert value == "secret"
+
+
+POSITION_PAGE = """<!doctype html><html><head><title>Pos</title></head><body style="margin:0">
+<div id="icon" style="position:absolute;left:0;top:0;width:40px;height:60px"
+     onclick="location.hash = event.target.id === 'icon' ? '#/div' : '#/inner'">
+  <span id="inner" style="position:absolute;left:10px;top:20px;width:20px;height:20px;background:#000"></span>
+</div></body></html>"""
+
+
+def test_click_position_hits_the_given_point(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HEADLESS", "1")
+    monkeypatch.delenv("WEBAUTO_CDP_URL", raising=False)
+    from webauto._playwright_handle import PlaywrightHandle
+
+    page = tmp_path / "pos.html"
+    page.write_text(POSITION_PAGE)
+    pw = PlaywrightHandle()
+    try:
+        pw.goto(page.as_uri())
+        pw.click("#icon")  # centre lands on the inner span
+        pw.wait_for_url("#/inner", timeout=5)
+        pw.click("#icon", position=(20, 5))  # top edge lands on the div itself
+        pw.wait_for_url("#/div", timeout=5)
+    finally:
+        pw.close()

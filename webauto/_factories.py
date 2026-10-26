@@ -8,7 +8,7 @@ late-bind to params via `BaseAction.get_parameter(...)`.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 from webauto._types import BrowserHandle, Step
 
@@ -42,13 +42,21 @@ def fill(selector: StrOrLazy, value: StrOrLazy) -> Step:
     return step
 
 
-def click(selector: StrOrLazy) -> Step:
-    """Click the element matched by `selector`."""
+def click(selector: StrOrLazy, position: Optional[tuple] = None) -> Step:
+    """Click the element matched by `selector`.
+
+    `position=(x, y)` clicks that point, in CSS pixels from the element's
+    top-left corner, instead of its centre (e.g. to hit a container rather
+    than the icon drawn in its middle).
+    """
 
     def step(handle: BrowserHandle) -> None:
-        handle.click(_resolve(selector))
+        if position is None:
+            handle.click(_resolve(selector))
+        else:
+            handle.click(_resolve(selector), position=tuple(position))
 
-    step.__name__ = f"click({selector!r})"
+    step.__name__ = f"click({selector!r})" if position is None else f"click({selector!r}, position={tuple(position)})"
     return step
 
 

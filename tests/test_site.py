@@ -188,6 +188,15 @@ class TestRun:
         with pytest.raises(SiteError, match="solve_captcha"):
             build_action(load_site(path), {"USERNAME": "u", "PASSWORD": "p"})
 
+    def test_click_with_position(self, tmp_path, handle) -> None:
+        path = tmp_path / "pos.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- click: {selector: '#icon', position: [11, 8]}\n      - done"))
+        self._login_ok(handle)
+
+        run_site(path, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle)
+
+        assert ("click", "#icon", (11, 8)) in handle.calls
+
     def test_start_url_override(self, site_file, handle) -> None:
         with pytest.raises(UnexpectedPage):
             run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
