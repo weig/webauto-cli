@@ -171,4 +171,5 @@ class SchwabAuthLocal(BaseAction):
 
 if __name__ == "__main__":
     action = SchwabAuthLocal()
-    init(url=action.params.URL, action=action)
+    # Schwab's bot checks need SeleniumBase's UC mode; Playwright is the default.
+    init(url=action.params.URL, action=action, browser="seleniumbase")

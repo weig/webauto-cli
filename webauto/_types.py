@@ -56,6 +56,7 @@ class BrowserHandle(Protocol):
     def sleep_ms(self, ms: int) -> None: ...
     def screenshot(self, path: str) -> None: ...
     def is_visible(self, selector: str) -> bool: ...
+    def count(self, selector: str) -> int: ...
     def close(self) -> None: ...
 
 
@@ -155,11 +156,15 @@ class BaseAction:
       - `actions: list[PageAction]` — either as a class attribute (static)
         or assigned in __init__ (when referencing params).
       - `timeout_seconds: float = 300.0` (optional) — inner action timeout.
+      - `on_failure: list[Step]` (optional) — best-effort cleanup steps run
+        by init() when a step raises (e.g. click a logout link). Errors in
+        these steps are logged and never mask the original failure.
     """
 
     Params: ClassVar[Optional[type]] = None
     timeout_seconds: ClassVar[float] = 300.0
     actions: list[PageAction] = []
+    on_failure: list[Step] = []
 
     def __init__(self, params: Any = None) -> None:
         if params is None and self.Params is not None:

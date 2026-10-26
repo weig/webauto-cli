@@ -7,8 +7,10 @@ for `done()`-only scripts), launches the browser, runs the action, exits.
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any, NoReturn, Optional
 
+from webauto._handles import make_handle
 from webauto._notify import _notify_ctx
 from webauto._notification_client import _post_notification
 from webauto._runner import run_actions
@@ -51,6 +53,7 @@ def init(
     notification: Optional[dict] = None,
     timeout_seconds: Optional[float] = None,
     handle: Any = None,
+    browser: Optional[str] = None,
 ) -> None:
     """Drive `action` against `url`. Ends when a step calls notify() or done().
 
@@ -62,8 +65,13 @@ def init(
                       `AUTOMATION_NOTIFICATION_ENDPOINT` from env. If those
                       are absent too, no channel — script must call `done()`.
       timeout_seconds: optional override for action.timeout_seconds.
-      handle:         optional BrowserHandle (for testing). If None, a real
-                      SeleniumBaseHandle is constructed.
+      handle:         optional BrowserHandle (for testing). If None, one is
+                      built for `browser`.
+      browser:        "playwright" (default) or "seleniumbase". Falls back to
+                      the WEBAUTO_BROWSER env var, then "playwright".
+
+    If a step raises, `action.on_failure` steps run (best effort) before the
+    browser closes and the original error propagates.
     """
     resolved = _resolve_notification(notification)
 
@@ -75,15 +83,25 @@ def init(
         emitter = _no_channel_emitter
 
     if handle is None:
-        # Lazy import — seleniumbase is heavy; avoid loading it for unit tests
-        # that pass an explicit `handle`.
-        from webauto._seleniumbase_handle import SeleniumBaseHandle
-        handle = SeleniumBaseHandle()
+        handle = make_handle(browser)
 
     token = _notify_ctx.set(emitter)
     try:
         handle.goto(url)
         run_actions(handle, action, timeout_seconds=timeout_seconds)
+    except Exception:
+        _run_cleanup(handle, action.on_failure)
+        raise
     finally:
         _notify_ctx.reset(token)
         handle.close()
+
+
+def _run_cleanup(handle: Any, steps: list) -> None:
+    """Run on_failure steps; report and swallow their errors so the original one wins."""
+    for step in steps:
+        try:
+            step(handle)
+        except Exception as exc:  # noqa: BLE001 — cleanup must never mask the real failure
+            name = getattr(step, "__name__", repr(step))
+            print(f"[webauto] on_failure step {name} failed: {exc!r}", file=sys.stderr)

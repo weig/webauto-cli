@@ -6,7 +6,7 @@ No OAuth assumptions in the framework. OAuth is a one-page helper (`webauto.oaut
 
 ## Install
 
-Managed with [uv](https://docs.astral.sh/uv/). Python 3.11+; the only runtime dep is `seleniumbase`.
+Managed with [uv](https://docs.astral.sh/uv/). Python 3.11+. Runtime deps: `playwright` (the default browser backend, driving the system Chrome), `seleniumbase` (opt-in backend, imported only when selected), `pyyaml` (declarative sites) and `cryptography` (encrypted env files).
 
 ### One-liner (recommended)
 
@@ -177,6 +177,79 @@ PageAction(url_contains=self.params.REDIRECT_URI, steps=[
 
 `notify_redirect` reads `handle.url`, parses the OAuth query params, and calls `notify(payload)` with `{"kind": "code", ...}` or `{"kind": "error", ...}`.
 
+### Browser backends
+
+Playwright is the default. SeleniumBase (UC mode, useful against bot checks) is opt-in:
+
+```python
+init(url=..., action=action)                          # Playwright
+init(url=..., action=action, browser="seleniumbase")  # SeleniumBase
+```
+
+or set `WEBAUTO_BROWSER=seleniumbase` for the process. The explicit argument wins over the env var. The Schwab examples pass `browser="seleniumbase"`.
+
+Selectors work the same on both: XPath when they start with `/` or `(`, `text=...` for a substring match, CSS otherwise. On Playwright, `fill`/`click` are strict — a selector matching more than one element raises instead of acting on the first — and screenshots mask password inputs.
+
+### Verification steps
+
+`verify_all` checks a page's structure before you act on it. Every expectation is evaluated and reported; it raises `VerificationFailed` (listing each check as ✓/✗ with expected vs found counts) only after all of them ran, so put it in front of the steps it guards:
+
+```python
+from webauto import expect, verify_all, click_if_unique, unexpected_page
+
+PageAction(url_contains="/logon", steps=[
+    verify_all(
+        expect("login form", "//form[@id='loginForm'][count(.//input|.//button)=3]"),
+        expect("user field", "//input[@id='UserName']"),
+        expect("rows", ".row", count=3),          # default count is 1
+        screenshot="/tmp/login_failed.png",       # taken only on failure
+    ),
+    fill("//input[@id='UserName']", p("USERNAME")),
+    click("//button[@id='btnLogonSubmit']"),
+]),
+PageAction(url_any=True, order=1000, steps=[unexpected_page(grace_seconds=10)]),
+```
+
+- `unexpected_page` is a catch-all step: it gives a transient URL `grace_seconds` to move on, then raises `UnexpectedPage` instead of idling until the global timeout.
+- `click_if_unique(selector)` clicks only when exactly one element matches — meant for cleanup.
+- `BaseAction.on_failure` is a list of steps `init()` runs (best effort) when any step raises, before closing the browser; their errors never mask the original one.
+
+### Declarative sites (YAML)
+
+A site file describes pages, selectors and steps without writing an action class. See the docstring of `webauto/_site.py` for the full schema.
+
+```yaml
+name: wbct
+start_url: https://example.com/logon
+params: [USERNAME, PASSWORD]
+on_failure:
+  - click_if_unique: "//a[@href='/logout']"
+pages:
+  - name: login
+    url_contains: /logon
+    steps:
+      - verify:
+          login form: "//form[@id='loginForm'][count(.//input|.//button)=3]"
+      - fill: {selector: "//input[@id='UserName']", value: $USERNAME}
+      - fill: {selector: "//input[@id='Password']", value: $PASSWORD}
+      - click: "//button[@id='btnLogonSubmit']"
+      - wait_page_change: 30
+  - name: home
+    url_regex: '/\?_='
+    steps:
+      - verify:
+          logged in: "//div[@class='headerUserSite']"
+      - click: "//a[@href='/logout']"
+      - done
+```
+
+```python
+from webauto import run_site
+run_site("sites/wbct.yaml", {"USERNAME": "...", "PASSWORD": "..."}, screenshot_dir="shots/")
+```
+
+A catch-all `unexpected_page` (10 s grace; `unexpected_page: false` to disable) is appended automatically. Missing params fail before the browser starts.
+
 ## CLI
 
 ```
@@ -222,7 +295,10 @@ Env vars the framework sets (consumed by your script):
 | `AUTOMATION_STATE` | optional correlation token; framework does NOT inject it into the body |
 | `HEADLESS` | headless by default; set `HEADLESS=0` (or `false`/`no`/`off`) for a visible window |
 | `DEBUG` | same — verbose logging |
-| `CHROME_VERSION` | pin chromedriver to this Chrome major version; if unset, framework auto-detects |
+| `CHROME_VERSION` | SeleniumBase only: pin chromedriver to this Chrome major version; if unset, framework auto-detects |
+| `WEBAUTO_BROWSER` | `playwright` (default) or `seleniumbase`; `init(browser=...)` overrides it |
+| `WEBAUTO_CDP_URL` | Playwright only: attach to an already running Chrome (`http://127.0.0.1:9222`) instead of launching one; that browser is left open |
+| `WEBAUTO_PW_CHANNEL` | Playwright only: browser channel to launch (default `chrome`, the system install) |
 
 `-a KEY=VALUE` env-passthroughs are entirely script-defined; the framework never reads or interprets them.
 
@@ -294,7 +370,7 @@ To rotate the key:
 
 ```bash
 uv sync                   # installs runtime + dev deps (the [dependency-groups] dev group)
-uv run pytest             # 150 tests, ~13s
+uv run pytest             # 217 tests, ~20s (the Playwright handle tests need a local Chrome)
 ```
 
 ## Plan + design rationale
