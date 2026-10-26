@@ -127,6 +127,16 @@ def wait_page_change(timeout: float = 30.0, poll_ms: int = 100) -> Step:
     return step
 
 
+def press(key: StrOrLazy) -> Step:
+    """Press a keyboard key on the page (e.g. "Escape", "Enter", "Tab")."""
+
+    def step(handle: BrowserHandle) -> None:
+        handle.press(_resolve(key))
+
+    step.__name__ = f"press({key!r})"
+    return step
+
+
 def sleep(ms: IntOrLazy) -> Step:
     """Sleep `ms` milliseconds. Mostly for debugging — prefer wait_* in real flows."""
 

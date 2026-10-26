@@ -100,6 +100,9 @@ class PlaywrightHandle:
     def sleep_ms(self, ms: int) -> None:
         self._page.wait_for_timeout(ms)
 
+    def press(self, key: str) -> None:
+        self._page.keyboard.press(key)
+
     def screenshot(self, path: str) -> None:
         self._page.screenshot(path=path, full_page=True, mask=[self._page.locator("input[type=password]")])
 

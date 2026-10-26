@@ -23,7 +23,7 @@
           - done
 
 Step keys: verify, fill, click, click_if_unique, check, uncheck, wait_visible,
-wait_url_contains, wait_page_change, sleep, screenshot, done.
+wait_url_contains, wait_page_change, sleep, press, screenshot, done.
 """
 
 from __future__ import annotations
@@ -128,6 +128,7 @@ def _build_step(
         "wait_url_contains": lambda: f.wait_url_contains(arg),
         "wait_page_change": lambda: f.wait_page_change(float(arg or 30)),
         "sleep": lambda: f.sleep(int(arg)),
+        "press": lambda: f.press(arg),
         "screenshot": lambda: f.screenshot(arg),
     }
     if kind not in builders:

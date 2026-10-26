@@ -477,6 +477,12 @@ class SeleniumBaseHandle:
     def sleep_ms(self, ms: int) -> None:
         time.sleep(ms / 1000.0)
 
+    def press(self, key: str) -> None:
+        # Same key names as Playwright ("Escape", "Enter", "Tab", ...).
+        from selenium.webdriver.common.action_chains import ActionChains
+        from selenium.webdriver.common.keys import Keys
+        ActionChains(self._driver).send_keys(getattr(Keys, key.upper(), key)).perform()
+
     def screenshot(self, path: str) -> None:
         self._driver.save_screenshot(path)
 
