@@ -131,6 +131,32 @@ class TestRun:
 
         assert ("press", "Escape") in handle.calls
 
+    def test_extra_steps_bare_and_with_argument(self, tmp_path, handle) -> None:
+        path = tmp_path / "extra.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- solve_captcha\n      - stamp: hello\n      - done"))
+        self._login_ok(handle)
+        seen = []
+        extra = {
+            "solve_captcha": lambda arg: (lambda h: seen.append(("solve_captcha", arg))),
+            "stamp": lambda arg: (lambda h: seen.append(("stamp", arg))),
+        }
+
+        run_site(path, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle, extra_steps=extra)
+
+        assert seen == [("solve_captcha", None), ("stamp", "hello")]
+
+    def test_extra_step_cannot_shadow_builtin(self, site_file, handle) -> None:
+        with pytest.raises(SiteError, match="click"):
+            run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
+                     extra_steps={"click": lambda arg: (lambda h: None)})
+
+    def test_unknown_bare_step_still_rejected(self, tmp_path) -> None:
+        path = tmp_path / "bad.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- solve_captcha\n      - done"))
+
+        with pytest.raises(SiteError, match="solve_captcha"):
+            build_action(load_site(path), {"USERNAME": "u", "PASSWORD": "p"})
+
     def test_start_url_override(self, site_file, handle) -> None:
         with pytest.raises(UnexpectedPage):
             run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,

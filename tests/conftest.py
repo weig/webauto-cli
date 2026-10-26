@@ -24,6 +24,8 @@ class MockBrowserHandle:
         # Match counts for count(); unlisted selectors fall back to
         # 1 if visible else 0.
         self.counts: dict[str, int] = {}
+        # Value evaluate() returns.
+        self.evaluate_result = None
         # Pre-scripted URL transitions: when this step index runs (0-based),
         # set self._url to the corresponding entry. None = no change.
         self.url_after_step: list[str | None] = []
@@ -83,6 +85,10 @@ class MockBrowserHandle:
     def press(self, key: str) -> None:
         self.calls.append(("press", key))
         self._advance()
+
+    def evaluate(self, script: str, arg=None):
+        self.calls.append(("evaluate", script, arg))
+        return self.evaluate_result
 
     def screenshot(self, path: str) -> None:
         self.calls.append(("screenshot", path))

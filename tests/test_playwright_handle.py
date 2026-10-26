@@ -77,3 +77,8 @@ def test_press_sends_key_to_page(pw) -> None:
     pw.wait_for_url("#/escaped", timeout=5)
 
     assert pw.url.endswith("#/escaped")
+
+
+def test_evaluate_runs_script_with_argument(pw) -> None:
+    assert pw.evaluate("(x) => x * 2", 21) == 42
+    assert pw.evaluate("() => document.title") == "Log In"
