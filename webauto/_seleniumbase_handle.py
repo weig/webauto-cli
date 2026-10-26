@@ -9,6 +9,7 @@ of truth for *why* each trick is here; the comments below summarize.
 from __future__ import annotations
 
 import os
+import re
 import socket
 import sys
 import time
@@ -145,6 +146,25 @@ def _score_window_url(url: str, target_url: Optional[str] = None) -> int:
     if url.startswith("chrome://"):
         return 1
     return 0
+
+
+def selenium_key(key: str) -> str:
+    """Map a Playwright key name ("Escape", "ArrowDown", "a") to what Selenium sends.
+
+    Named keys become Selenium Keys constants (ArrowDown -> ARROW_DOWN); a
+    single character is sent as-is. Anything else raises rather than being
+    typed into the page as literal text. Combinations ("Control+A") are not
+    supported on this backend.
+    """
+    from selenium.webdriver.common.keys import Keys
+    if len(key) == 1:
+        return key
+    if "+" in key:
+        raise ValueError(f"key combination {key!r} is not supported by the SeleniumBase backend")
+    name = re.sub(r"(?<!^)(?=[A-Z])", "_", key).upper()
+    if hasattr(Keys, name):
+        return getattr(Keys, name)
+    raise ValueError(f"unknown key {key!r}")
 
 
 class SeleniumBaseHandle:
@@ -476,6 +496,10 @@ class SeleniumBaseHandle:
 
     def sleep_ms(self, ms: int) -> None:
         time.sleep(ms / 1000.0)
+
+    def press(self, key: str) -> None:
+        from selenium.webdriver.common.action_chains import ActionChains
+        ActionChains(self._driver).send_keys(selenium_key(key)).perform()
 
     def screenshot(self, path: str) -> None:
         self._driver.save_screenshot(path)

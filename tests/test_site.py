@@ -122,6 +122,15 @@ class TestRun:
         assert handle.calls[-1] == ("close",)
         assert any(c[0] == "screenshot" and str(tmp_path) in c[1] for c in handle.calls)
 
+    def test_press_step(self, tmp_path, handle) -> None:
+        path = tmp_path / "press.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- press: Escape\n      - done"))
+        self._login_ok(handle)
+
+        run_site(path, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle)
+
+        assert ("press", "Escape") in handle.calls
+
     def test_start_url_override(self, site_file, handle) -> None:
         with pytest.raises(UnexpectedPage):
             run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,

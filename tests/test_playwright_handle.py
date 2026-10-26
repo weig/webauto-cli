@@ -20,6 +20,7 @@ PAGE = """<!doctype html><html><head><title>Log In</title></head><body>
   <button id="go" type="button" onclick="location.hash='#/home'">Log On</button>
 </form>
 <a class="dup">x</a><a class="dup">y</a>
+<script>document.addEventListener('keydown', e => { if (e.key === 'Escape') location.hash = '#/escaped'; });</script>
 </body></html>"""
 
 
@@ -69,3 +70,10 @@ def test_ambiguous_click_is_refused(pw) -> None:
 
     with pytest.raises(Error, match="strict mode violation"):
         pw.click("a.dup")
+
+
+def test_press_sends_key_to_page(pw) -> None:
+    pw.press("Escape")
+    pw.wait_for_url("#/escaped", timeout=5)
+
+    assert pw.url.endswith("#/escaped")

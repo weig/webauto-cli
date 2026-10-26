@@ -127,3 +127,12 @@ class TestCustom:
         a = Action()
         custom(a.step)(handle)
         assert a.h is handle  # type: ignore[attr-defined]
+
+
+class TestPress:
+    def test_sends_key_to_handle(self, handle) -> None:
+        from webauto._factories import press
+
+        press("Escape")(handle)
+
+        assert handle.calls == [("press", "Escape")]

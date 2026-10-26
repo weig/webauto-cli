@@ -80,6 +80,10 @@ class MockBrowserHandle:
     def sleep_ms(self, ms: int) -> None:
         self.calls.append(("sleep_ms", ms))
 
+    def press(self, key: str) -> None:
+        self.calls.append(("press", key))
+        self._advance()
+
     def screenshot(self, path: str) -> None:
         self.calls.append(("screenshot", path))
         self._advance()
