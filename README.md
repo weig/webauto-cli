@@ -188,7 +188,7 @@ init(url=..., action=action, browser="seleniumbase")  # SeleniumBase
 
 or set `WEBAUTO_BROWSER=seleniumbase` for the process. The explicit argument wins over the env var. The Schwab examples pass `browser="seleniumbase"`.
 
-Selectors work the same on both: XPath when they start with `/` or `(`, `text=...` for a substring match, CSS otherwise. On Playwright, `fill`/`click` are strict — a selector matching more than one element raises instead of acting on the first — and screenshots mask password inputs.
+Selectors work the same on both: XPath when they start with `/` or `(`, `text=...` for a substring match, CSS otherwise. To reach into an iframe, write `<frame selector> >> <element selector>` (e.g. `//iframe[@id='WAUTP002'] >> //input[@name='PI_ORI_PASSWORD']`): the left part must match exactly one iframe, the right part is resolved inside it (one level). A missing frame counts as 0 / not visible; actions raise. On Playwright, `fill`/`click` are strict — a selector matching more than one element raises instead of acting on the first — and screenshots mask password inputs.
 
 ### Verification steps
 
