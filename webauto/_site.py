@@ -23,14 +23,19 @@
           - done
 
 Step keys: verify, fill, click, click_if_unique, check, uncheck, wait_visible,
-wait_url_contains, wait_page_change, sleep, press, screenshot, done.
+wait_url_contains, wait_page_change, sleep, press, screenshot, done. Callers can
+add their own with `extra_steps={name: builder}`; a builder takes the step's
+argument (None for a bare `- name`) and returns a step. Extra names may not
+shadow built-in ones. In an extra step's argument `$NAME` is replaced anywhere
+in nested mappings and lists (an unknown name is an error); write `$$` for a
+literal `$`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Mapping, Optional, Union
 
 import yaml
 
@@ -40,6 +45,7 @@ from webauto._notify import done
 from webauto._types import BaseAction, PageAction, Step
 from webauto._verify import click_if_unique, expect, unexpected_page, verify_all
 
+ExtraSteps = Mapping[str, Callable[[Any], Step]]
 URL_MATCHERS = ("url_contains", "url_equals", "url_startswith", "url_regex", "url_any")
 DEFAULT_GRACE_SECONDS = 10.0
 DEFAULT_VERIFY_TIMEOUT = 10.0
@@ -90,6 +96,22 @@ def _value(raw: Any, params: dict) -> Any:
     return raw
 
 
+def _extra_arg(raw: Any, params: dict, label: str) -> Any:
+    """Resolve an extra step's argument: `$NAME` anywhere in nested dicts/lists, `$$` for a literal `$`."""
+    if isinstance(raw, dict):
+        return {k: _extra_arg(v, params, label) for k, v in raw.items()}
+    if isinstance(raw, list):
+        return [_extra_arg(v, params, label) for v in raw]
+    if isinstance(raw, str) and raw.startswith("$$"):
+        return raw[1:]
+    if isinstance(raw, str) and raw.startswith("$"):
+        name = raw[1:]
+        if name not in params:
+            raise SiteError(f"{label}: unknown param ${name} (write $$ for a literal $)")
+        return params[name]
+    return raw
+
+
 def _shot(screenshot_dir: Optional[Path], name: str) -> Optional[str]:
     return str(screenshot_dir / f"{name}.png") if screenshot_dir else None
 
@@ -109,14 +131,30 @@ def _done_step(_handle: Any) -> None:
 
 
 def _build_step(
-    raw: Any, params: dict, label: str, screenshot_dir: Optional[Path], verify_timeout: float = 0.0
+    raw: Any, params: dict, label: str, screenshot_dir: Optional[Path], verify_timeout: float = 0.0,
+    extra_steps: Optional[ExtraSteps] = None,
 ) -> Step:
+    extra = extra_steps or {}
     if raw == "done":
         return f.custom(_done_step)
+    if isinstance(raw, str) and raw in extra:
+        return extra[raw](None)
     if not isinstance(raw, dict) or len(raw) != 1:
-        raise SiteError(f"{label}: each step must be 'done' or a single-key mapping, got {raw!r}")
+        raise SiteError(f"{label}: each step must be 'done', an extra step name or a single-key mapping, got {raw!r}")
     (kind, arg), = raw.items()
-    builders: dict[str, Callable[[], Step]] = {
+    if kind in extra:
+        return extra[kind](_extra_arg(arg, params, label))
+    builders = _builders(arg, params, label, screenshot_dir, verify_timeout)
+    if kind not in builders:
+        raise SiteError(f"{label}: unknown step {kind!r}; known: {', '.join(sorted(builders))}, done")
+    return builders[kind]()
+
+
+def _builders(
+    arg: Any, params: dict, label: str, screenshot_dir: Optional[Path], verify_timeout: float
+) -> dict[str, Callable[[], Step]]:
+    """Built-in step builders keyed by step name; BUILTIN_STEPS is derived from these keys."""
+    return {
         "verify": lambda: _verify_step(arg, label, screenshot_dir, verify_timeout),
         "fill": lambda: f.fill(arg["selector"], _value(arg["value"], params)),
         "click": lambda: f.click(arg),
@@ -131,32 +169,41 @@ def _build_step(
         "press": lambda: f.press(arg),
         "screenshot": lambda: f.screenshot(arg),
     }
-    if kind not in builders:
-        raise SiteError(f"{label}: unknown step {kind!r}; known: {', '.join(sorted(builders))}, done")
-    return builders[kind]()
 
 
-def _page_action(page: dict, params: dict, screenshot_dir: Optional[Path], verify_timeout: float) -> PageAction:
+BUILTIN_STEPS = frozenset(_builders(None, {}, "", None, 0.0)) | {"done"}
+
+
+def _page_action(
+    page: dict, params: dict, screenshot_dir: Optional[Path], verify_timeout: float,
+    extra_steps: Optional[ExtraSteps] = None,
+) -> PageAction:
     name = page.get("name", "?")
     matchers = {k: page[k] for k in URL_MATCHERS if k in page}
     if len(matchers) != 1:
         raise SiteError(f"page {name!r}: needs exactly one of {', '.join(URL_MATCHERS)}")
-    steps = [_build_step(raw, params, f"{name}_step{i}", screenshot_dir, verify_timeout)
+    steps = [_build_step(raw, params, f"{name}_step{i}", screenshot_dir, verify_timeout, extra_steps)
              for i, raw in enumerate(page.get("steps") or [], start=1)]
     return PageAction(steps=steps, order=int(page.get("order", 100)), **matchers)
 
 
-def build_action(site: Site, params: dict, screenshot_dir: Optional[Path] = None) -> BaseAction:
+def build_action(
+    site: Site, params: dict, screenshot_dir: Optional[Path] = None, extra_steps: Optional[ExtraSteps] = None,
+) -> BaseAction:
+    shadowed = sorted(set(extra_steps or {}) & BUILTIN_STEPS)
+    if shadowed:
+        raise SiteError(f"extra steps may not shadow built-in steps: {', '.join(shadowed)}")
     missing = [p for p in site.params if p not in params]
     if missing:
         raise SiteError(f"site {site.name!r}: missing params {', '.join(missing)}")
-    actions = [_page_action(page, params, screenshot_dir, site.verify_timeout) for page in site.pages]
+    actions = [_page_action(page, params, screenshot_dir, site.verify_timeout, extra_steps) for page in site.pages]
     if site.unexpected_page is not None:
         grace = float(site.unexpected_page.get("grace_seconds", DEFAULT_GRACE_SECONDS))
         actions.append(PageAction(url_any=True, order=CATCH_ALL_ORDER, steps=[
             unexpected_page(grace_seconds=grace, screenshot=_shot(screenshot_dir, "unexpected_page")),
         ]))
-    cleanup = [_build_step(raw, params, f"on_failure{i}", None) for i, raw in enumerate(site.on_failure, 1)]
+    cleanup = [_build_step(raw, params, f"on_failure{i}", None, 0.0, extra_steps)
+               for i, raw in enumerate(site.on_failure, 1)]
 
     action_cls = type(f"Site_{site.name}", (BaseAction,), {"timeout_seconds": site.timeout_seconds})
     action = action_cls()
@@ -174,6 +221,7 @@ def run_site(
     screenshot_dir: Optional[Union[str, Path]] = None,
     navigate: bool = True,
     start_url: Optional[str] = None,
+    extra_steps: Optional[ExtraSteps] = None,
 ) -> None:
     """Load a site file and drive it. Raises VerificationFailed / UnexpectedPage on mismatch.
 
@@ -185,7 +233,7 @@ def run_site(
     shots = Path(screenshot_dir) if screenshot_dir else None
     if shots:
         shots.mkdir(parents=True, exist_ok=True)
-    action = build_action(site, params, shots)
+    action = build_action(site, params, shots, extra_steps)
     url = start_url or site.start_url
     if not navigate:
         if handle is None:

@@ -103,6 +103,14 @@ class PlaywrightHandle:
     def press(self, key: str) -> None:
         self._page.keyboard.press(key)
 
+    def evaluate(self, script: str, arg: Any = None) -> Any:
+        """Run a JS function source (e.g. "(x) => x * 2") in the page with one argument.
+
+        A returned Promise is awaited here but not on SeleniumBase; keep scripts
+        synchronous so both backends agree.
+        """
+        return self._page.evaluate(script, arg)
+
     def screenshot(self, path: str) -> None:
         self._page.screenshot(path=path, full_page=True, mask=[self._page.locator("input[type=password]")])
 

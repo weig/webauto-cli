@@ -497,6 +497,13 @@ class SeleniumBaseHandle:
     def sleep_ms(self, ms: int) -> None:
         time.sleep(ms / 1000.0)
 
+    def evaluate(self, script: str, arg: Any = None) -> Any:
+        """Run a JS function source in the page with one argument, like Playwright's evaluate.
+
+        Unlike Playwright, a returned Promise is not awaited (execute_script gives {}).
+        """
+        return self._driver.execute_script(f"return ({script})(arguments[0]);", arg)
+
     def press(self, key: str) -> None:
         from selenium.webdriver.common.action_chains import ActionChains
         ActionChains(self._driver).send_keys(selenium_key(key)).perform()

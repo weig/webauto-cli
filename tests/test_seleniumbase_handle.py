@@ -216,3 +216,21 @@ class TestSeleniumKeyMapping:
         handle.press("ArrowDown")
 
         assert sent == [Keys.ARROW_DOWN, "performed"]
+
+
+class TestSeleniumEvaluate:
+    def test_wraps_function_source_for_execute_script(self) -> None:
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+
+        calls = []
+
+        class FakeDriver:
+            def execute_script(self, script, *args):
+                calls.append((script, args))
+                return "ok"
+
+        handle = object.__new__(SeleniumBaseHandle)
+        handle._driver = FakeDriver()
+
+        assert handle.evaluate("(x) => x", 5) == "ok"
+        assert calls == [("return ((x) => x)(arguments[0]);", (5,))]
