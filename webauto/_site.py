@@ -26,7 +26,9 @@ Step keys: verify, fill, click, click_if_unique, check, uncheck, wait_visible,
 wait_url_contains, wait_page_change, sleep, press, screenshot, done. Callers can
 add their own with `extra_steps={name: builder}`; a builder takes the step's
 argument (None for a bare `- name`) and returns a step. Extra names may not
-shadow built-in ones.
+shadow built-in ones. In an extra step's argument `$NAME` is replaced anywhere
+in nested mappings and lists (an unknown name is an error); write `$$` for a
+literal `$`.
 """
 
 from __future__ import annotations
@@ -43,10 +45,6 @@ from webauto._notify import done
 from webauto._types import BaseAction, PageAction, Step
 from webauto._verify import click_if_unique, expect, unexpected_page, verify_all
 
-BUILTIN_STEPS = frozenset({
-    "verify", "fill", "click", "click_if_unique", "check", "uncheck", "wait_visible",
-    "wait_url_contains", "wait_page_change", "sleep", "press", "screenshot", "done",
-})
 ExtraSteps = Mapping[str, Callable[[Any], Step]]
 URL_MATCHERS = ("url_contains", "url_equals", "url_startswith", "url_regex", "url_any")
 DEFAULT_GRACE_SECONDS = 10.0
@@ -98,6 +96,22 @@ def _value(raw: Any, params: dict) -> Any:
     return raw
 
 
+def _extra_arg(raw: Any, params: dict, label: str) -> Any:
+    """Resolve an extra step's argument: `$NAME` anywhere in nested dicts/lists, `$$` for a literal `$`."""
+    if isinstance(raw, dict):
+        return {k: _extra_arg(v, params, label) for k, v in raw.items()}
+    if isinstance(raw, list):
+        return [_extra_arg(v, params, label) for v in raw]
+    if isinstance(raw, str) and raw.startswith("$$"):
+        return raw[1:]
+    if isinstance(raw, str) and raw.startswith("$"):
+        name = raw[1:]
+        if name not in params:
+            raise SiteError(f"{label}: unknown param ${name} (write $$ for a literal $)")
+        return params[name]
+    return raw
+
+
 def _shot(screenshot_dir: Optional[Path], name: str) -> Optional[str]:
     return str(screenshot_dir / f"{name}.png") if screenshot_dir else None
 
@@ -129,8 +143,18 @@ def _build_step(
         raise SiteError(f"{label}: each step must be 'done', an extra step name or a single-key mapping, got {raw!r}")
     (kind, arg), = raw.items()
     if kind in extra:
-        return extra[kind](_value(arg, params))
-    builders: dict[str, Callable[[], Step]] = {
+        return extra[kind](_extra_arg(arg, params, label))
+    builders = _builders(arg, params, label, screenshot_dir, verify_timeout)
+    if kind not in builders:
+        raise SiteError(f"{label}: unknown step {kind!r}; known: {', '.join(sorted(builders))}, done")
+    return builders[kind]()
+
+
+def _builders(
+    arg: Any, params: dict, label: str, screenshot_dir: Optional[Path], verify_timeout: float
+) -> dict[str, Callable[[], Step]]:
+    """Built-in step builders keyed by step name; BUILTIN_STEPS is derived from these keys."""
+    return {
         "verify": lambda: _verify_step(arg, label, screenshot_dir, verify_timeout),
         "fill": lambda: f.fill(arg["selector"], _value(arg["value"], params)),
         "click": lambda: f.click(arg),
@@ -145,9 +169,9 @@ def _build_step(
         "press": lambda: f.press(arg),
         "screenshot": lambda: f.screenshot(arg),
     }
-    if kind not in builders:
-        raise SiteError(f"{label}: unknown step {kind!r}; known: {', '.join(sorted(builders))}, done")
-    return builders[kind]()
+
+
+BUILTIN_STEPS = frozenset(_builders(None, {}, "", None, 0.0)) | {"done"}
 
 
 def _page_action(

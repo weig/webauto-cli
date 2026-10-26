@@ -145,6 +145,37 @@ class TestRun:
 
         assert seen == [("solve_captcha", None), ("stamp", "hello")]
 
+    def test_extra_step_argument_resolves_nested_params(self, tmp_path, handle) -> None:
+        path = tmp_path / "nested.yaml"
+        path.write_text(SITE_YAML.replace(
+            "- done", "- stamp: {key: $USERNAME, keep: plain, many: [$PASSWORD, x]}\n      - done"))
+        self._login_ok(handle)
+        seen = []
+
+        run_site(path, {"USERNAME": "alice", "PASSWORD": "pw"}, handle=handle,
+                 extra_steps={"stamp": lambda arg: (lambda h: seen.append(arg))})
+
+        assert seen == [{"key": "alice", "keep": "plain", "many": ["pw", "x"]}]
+
+    def test_extra_step_unknown_param_is_a_site_error(self, tmp_path, handle) -> None:
+        path = tmp_path / "unknown.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- stamp: {price: $NOPE}\n      - done"))
+
+        with pytest.raises(SiteError, match="NOPE"):
+            run_site(path, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
+                     extra_steps={"stamp": lambda arg: (lambda h: None)})
+
+    def test_extra_step_double_dollar_is_a_literal(self, tmp_path, handle) -> None:
+        path = tmp_path / "literal.yaml"
+        path.write_text(SITE_YAML.replace("- done", "- stamp: {price: $$5.00}\n      - done"))
+        self._login_ok(handle)
+        seen = []
+
+        run_site(path, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
+                 extra_steps={"stamp": lambda arg: (lambda h: seen.append(arg))})
+
+        assert seen == [{"price": "$5.00"}]
+
     def test_extra_step_cannot_shadow_builtin(self, site_file, handle) -> None:
         with pytest.raises(SiteError, match="click"):
             run_site(site_file, {"USERNAME": "a", "PASSWORD": "b"}, handle=handle,
@@ -170,3 +201,9 @@ class TestRun:
         with pytest.raises(UnexpectedPage):
             run_site(site_file, {"USERNAME": "alice", "PASSWORD": "pw"}, handle=handle,
                      navigate=False)
+
+
+def test_builtin_steps_match_the_builder_table() -> None:
+    from webauto._site import BUILTIN_STEPS, _builders
+
+    assert BUILTIN_STEPS == frozenset(_builders(None, {}, "t", None, 0.0)) | {"done"}
