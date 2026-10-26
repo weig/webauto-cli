@@ -24,6 +24,8 @@ class MockBrowserHandle:
         # Match counts for count(); unlisted selectors fall back to
         # 1 if visible else 0.
         self.counts: dict[str, int] = {}
+        # Selectors that exist in the DOM but are not displayed.
+        self.hidden: set[str] = set()
         # Value evaluate() returns.
         self.evaluate_result = None
         # Pre-scripted URL transitions: when this step index runs (0-based),
@@ -49,8 +51,8 @@ class MockBrowserHandle:
         self.calls.append(("fill", selector, value))
         self._advance()
 
-    def click(self, selector: str) -> None:
-        self.calls.append(("click", selector))
+    def click(self, selector: str, position=None) -> None:
+        self.calls.append(("click", selector) if position is None else ("click", selector, position))
         self._advance()
 
     def check(self, selector: str) -> None:
@@ -99,6 +101,11 @@ class MockBrowserHandle:
 
     def count(self, selector: str) -> int:
         return self.counts.get(selector, 1 if selector in self.visible else 0)
+
+    def count_visible(self, selector: str) -> int:
+        if selector in self.hidden:
+            return 0
+        return self.count(selector)
 
     def close(self) -> None:
         self.calls.append(("close",))
