@@ -159,3 +159,60 @@ class TestCloseParksOnBlank:
         self._make_handle(_PlainDriver()).close()
         assert ("get", "about:blank") in calls
         assert ("quit", "") in calls
+
+
+class TestSeleniumKeyMapping:
+    """press() key names follow Playwright; unknown names must fail loudly."""
+
+    @pytest.mark.parametrize("name, attr", [
+        ("Escape", "ESCAPE"), ("Enter", "ENTER"), ("Tab", "TAB"),
+        ("ArrowDown", "ARROW_DOWN"), ("PageUp", "PAGE_UP"), ("Backspace", "BACKSPACE"),
+    ])
+    def test_named_keys_map_to_selenium_constants(self, name, attr) -> None:
+        from selenium.webdriver.common.keys import Keys
+        from webauto._seleniumbase_handle import selenium_key
+
+        assert selenium_key(name) == getattr(Keys, attr)
+
+    @pytest.mark.parametrize("char", ["a", "+", "7"])
+    def test_single_characters_are_sent_literally(self, char) -> None:
+        from webauto._seleniumbase_handle import selenium_key
+
+        assert selenium_key(char) == char
+
+    def test_unknown_key_raises(self) -> None:
+        from webauto._seleniumbase_handle import selenium_key
+
+        with pytest.raises(ValueError, match="unknown key 'Hyper'"):
+            selenium_key("Hyper")
+
+    def test_combination_raises(self) -> None:
+        from webauto._seleniumbase_handle import selenium_key
+
+        with pytest.raises(ValueError, match="combination"):
+            selenium_key("Control+A")
+
+    def test_press_sends_mapped_key_through_action_chains(self, monkeypatch) -> None:
+        from selenium.webdriver.common.keys import Keys
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+
+        sent = []
+
+        class FakeChains:
+            def __init__(self, driver) -> None:
+                self.driver = driver
+
+            def send_keys(self, key):
+                sent.append(key)
+                return self
+
+            def perform(self) -> None:
+                sent.append("performed")
+
+        monkeypatch.setattr("selenium.webdriver.common.action_chains.ActionChains", FakeChains)
+        handle = object.__new__(SeleniumBaseHandle)
+        handle._driver = object()
+
+        handle.press("ArrowDown")
+
+        assert sent == [Keys.ARROW_DOWN, "performed"]
