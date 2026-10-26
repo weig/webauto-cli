@@ -82,3 +82,38 @@ def test_press_sends_key_to_page(pw) -> None:
 def test_evaluate_runs_script_with_argument(pw) -> None:
     assert pw.evaluate("(x) => x * 2", 21) == 42
     assert pw.evaluate("() => document.title") == "Log In"
+
+
+FRAME_PAGE = """<!doctype html><html><head><title>Outer</title></head><body>
+<iframe id="inner" srcdoc="<input id='x' type='password'><button id='b' onclick=&quot;parent.location.hash='#/clicked'&quot;>Go</button>"></iframe>
+<input id="x" type="text">
+</body></html>"""
+
+
+@pytest.fixture
+def framed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HEADLESS", "1")
+    monkeypatch.delenv("WEBAUTO_CDP_URL", raising=False)
+    from webauto._playwright_handle import PlaywrightHandle
+
+    page = tmp_path / "framed.html"
+    page.write_text(FRAME_PAGE)
+    handle = PlaywrightHandle()
+    handle.goto(page.as_uri())
+    yield handle
+    handle.close()
+
+
+def test_frame_selector_counts_inside_the_iframe(framed) -> None:
+    assert framed.count("//iframe[@id='inner'] >> //input[@id='x' and @type='password']") == 1
+    assert framed.count("//input[@id='x' and @type='password']") == 0  # not visible from the page
+    assert framed.count("//iframe[@id='missing'] >> //input") == 0
+
+
+def test_frame_selector_fill_and_click(framed) -> None:
+    framed.fill("//iframe[@id='inner'] >> //input[@id='x']", "secret")
+    framed.click("//iframe[@id='inner'] >> //button[@id='b']")
+    framed.wait_for_url("#/clicked", timeout=5)
+
+    value = framed.evaluate("() => document.getElementById('inner').contentDocument.getElementById('x').value")
+    assert value == "secret"

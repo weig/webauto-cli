@@ -234,3 +234,54 @@ class TestSeleniumEvaluate:
 
         assert handle.evaluate("(x) => x", 5) == "ok"
         assert calls == [("return ((x) => x)(arguments[0]);", (5,))]
+
+
+class TestSeleniumFrameSelectors:
+    def _handle(self, frames=1, inner=1):
+        from webauto._seleniumbase_handle import SeleniumBaseHandle
+
+        log = []
+
+        class SwitchTo:
+            def frame(self, el):
+                log.append(("frame", el))
+
+            def default_content(self):
+                log.append(("default",))
+
+        class FakeDriver:
+            switch_to = SwitchTo()
+
+            def find_elements(self, by, value):
+                log.append(("find", value))
+                if "iframe" in value:
+                    return ["FRAME"] * frames
+                return ["EL"] * inner
+
+        handle = object.__new__(SeleniumBaseHandle)
+        handle._driver = FakeDriver()
+        return handle, log
+
+    def test_split_frame_selector(self) -> None:
+        from webauto._selectors import split_frame
+
+        assert split_frame("//iframe[@id='f'] >> //input") == ("//iframe[@id='f']", "//input")
+        assert split_frame("//input[@id='x']") == (None, "//input[@id='x']")
+
+    def test_count_switches_into_frame_and_back(self) -> None:
+        handle, log = self._handle(frames=1, inner=2)
+
+        assert handle.count("//iframe[@id='f'] >> //input") == 2
+        assert log == [("find", "//iframe[@id='f']"), ("frame", "FRAME"), ("find", "//input"), ("default",)]
+
+    def test_missing_frame_counts_zero_without_switching(self) -> None:
+        handle, log = self._handle(frames=0)
+
+        assert handle.count("//iframe[@id='f'] >> //input") == 0
+        assert ("frame", "FRAME") not in log
+
+    def test_ambiguous_frame_raises(self) -> None:
+        handle, _ = self._handle(frames=2)
+
+        with pytest.raises(ValueError, match="2 frames"):
+            handle.count("//iframe >> //input")

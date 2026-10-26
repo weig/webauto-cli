@@ -8,7 +8,8 @@ Environment:
                    system install, so no `playwright install` is needed)
 
 Selectors: XPath when they start with "/" or "(" (or "xpath="), webauto's
-`text=` substring form, otherwise CSS. fill/click are strict: a selector
+`text=` substring form, otherwise CSS; "<frame> >> <element>" looks inside one
+iframe (see webauto._selectors). fill/click are strict: a selector
 matching more than one element raises instead of acting on the first.
 Screenshots always mask password inputs.
 """
@@ -19,6 +20,8 @@ import os
 from typing import Any, Optional
 
 from playwright.sync_api import sync_playwright
+
+from webauto._selectors import split_frame
 
 _FALSY = ("0", "false", "no", "off")
 
@@ -58,6 +61,9 @@ class PlaywrightHandle:
             raise
 
     def _locator(self, selector: str) -> Any:
+        frame, inner = split_frame(selector)
+        if frame is not None:
+            return self._page.frame_locator(to_playwright_selector(frame)).locator(to_playwright_selector(inner))
         return self._page.locator(to_playwright_selector(selector))
 
     # ------------------------------------------------------------------
