@@ -60,6 +60,27 @@ class TestVerifyAll:
             verify_all(expect("missing", "#nope"), screenshot="/tmp/fail.png")(handle)
         assert handle.calls == [("screenshot", "/tmp/fail.png")]
 
+    def test_timeout_waits_for_late_elements(self, handle) -> None:
+        original_sleep = handle.sleep_ms
+
+        def render_on_sleep(ms: int) -> None:
+            original_sleep(ms)
+            handle.visible.add("#late")
+
+        handle.sleep_ms = render_on_sleep
+
+        verify_all(expect("late", "#late"), timeout=2.0)(handle)
+
+        assert ("sleep_ms", 250) in handle.calls
+
+    def test_timeout_still_reports_every_check_when_it_expires(self, handle) -> None:
+        handle.visible.add("#ok")
+
+        with pytest.raises(VerificationFailed) as err:
+            verify_all(expect("ok", "#ok"), expect("never", "#never"), timeout=0.3)(handle)
+
+        assert [(r.name, r.ok) for r in err.value.results] == [("ok", True), ("never", False)]
+
     def test_requires_at_least_one_expectation(self) -> None:
         with pytest.raises(ValueError):
             verify_all()

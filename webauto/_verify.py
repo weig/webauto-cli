@@ -58,13 +58,33 @@ def expect(name: str, selector: str, count: int = 1) -> Expectation:
     return Expectation(name=name, selector=selector, count=count)
 
 
-def verify_all(*expectations: Expectation, screenshot: Optional[StrOrLazy] = None) -> Step:
-    """Check every expectation; raise VerificationFailed listing all of them if any misses."""
+VERIFY_POLL_MS = 250
+
+
+def verify_all(
+    *expectations: Expectation,
+    screenshot: Optional[StrOrLazy] = None,
+    timeout: float = 0.0,
+) -> Step:
+    """Check every expectation; raise VerificationFailed listing all of them if any misses.
+
+    With `timeout` > 0 the checks are re-run until they all match or the time
+    is up, so a page that is still rendering gets a chance to finish. A page
+    that is genuinely different never matches, and the failure reports the
+    last evaluation of every check.
+    """
     if not expectations:
         raise ValueError("verify_all needs at least one expectation")
 
+    def evaluate(handle: BrowserHandle) -> list[CheckResult]:
+        return [CheckResult(e.name, e.selector, e.count, handle.count(e.selector)) for e in expectations]
+
     def step(handle: BrowserHandle) -> None:
-        results = [CheckResult(e.name, e.selector, e.count, handle.count(e.selector)) for e in expectations]
+        deadline = time.monotonic() + timeout
+        results = evaluate(handle)
+        while not all(r.ok for r in results) and time.monotonic() < deadline:
+            handle.sleep_ms(VERIFY_POLL_MS)
+            results = evaluate(handle)
         if all(r.ok for r in results):
             return
         if screenshot is not None:

@@ -5,6 +5,7 @@
     params: [USERNAME, PASSWORD]          # must all be supplied to run_site()
     browser: playwright                   # optional; see init(browser=)
     timeout_seconds: 180                  # optional
+    verify_timeout: 10                    # optional; seconds a verify waits for the page to render
     unexpected_page: {grace_seconds: 10}  # optional; `false` disables the catch-all
     on_failure:                           # optional cleanup, run when a step raises
       - click_if_unique: "//a[@href='/logout']"
@@ -41,6 +42,7 @@ from webauto._verify import click_if_unique, expect, unexpected_page, verify_all
 
 URL_MATCHERS = ("url_contains", "url_equals", "url_startswith", "url_regex", "url_any")
 DEFAULT_GRACE_SECONDS = 10.0
+DEFAULT_VERIFY_TIMEOUT = 10.0
 CATCH_ALL_ORDER = 1000
 
 
@@ -58,6 +60,7 @@ class Site:
     unexpected_page: Optional[dict]
     timeout_seconds: float
     browser: Optional[str]
+    verify_timeout: float = DEFAULT_VERIFY_TIMEOUT
 
 
 def load_site(path: Union[str, Path]) -> Site:
@@ -77,6 +80,7 @@ def load_site(path: Union[str, Path]) -> Site:
         unexpected_page=None if grace is False else dict(grace or {}),
         timeout_seconds=float(data.get("timeout_seconds", BaseAction.timeout_seconds)),
         browser=data.get("browser"),
+        verify_timeout=float(data.get("verify_timeout", DEFAULT_VERIFY_TIMEOUT)),
     )
 
 
@@ -90,28 +94,30 @@ def _shot(screenshot_dir: Optional[Path], name: str) -> Optional[str]:
     return str(screenshot_dir / f"{name}.png") if screenshot_dir else None
 
 
-def _verify_step(spec: dict, label: str, screenshot_dir: Optional[Path]) -> Step:
+def _verify_step(spec: dict, label: str, screenshot_dir: Optional[Path], timeout: float) -> Step:
     expectations = []
     for name, check in spec.items():
         if isinstance(check, str):
             expectations.append(expect(name, check))
         else:
             expectations.append(expect(name, check["selector"], int(check.get("count", 1))))
-    return verify_all(*expectations, screenshot=_shot(screenshot_dir, f"{label}_failed"))
+    return verify_all(*expectations, screenshot=_shot(screenshot_dir, f"{label}_failed"), timeout=timeout)
 
 
 def _done_step(_handle: Any) -> None:
     done()
 
 
-def _build_step(raw: Any, params: dict, label: str, screenshot_dir: Optional[Path]) -> Step:
+def _build_step(
+    raw: Any, params: dict, label: str, screenshot_dir: Optional[Path], verify_timeout: float = 0.0
+) -> Step:
     if raw == "done":
         return f.custom(_done_step)
     if not isinstance(raw, dict) or len(raw) != 1:
         raise SiteError(f"{label}: each step must be 'done' or a single-key mapping, got {raw!r}")
     (kind, arg), = raw.items()
     builders: dict[str, Callable[[], Step]] = {
-        "verify": lambda: _verify_step(arg, label, screenshot_dir),
+        "verify": lambda: _verify_step(arg, label, screenshot_dir, verify_timeout),
         "fill": lambda: f.fill(arg["selector"], _value(arg["value"], params)),
         "click": lambda: f.click(arg),
         "click_if_unique": lambda: click_if_unique(arg),
@@ -129,12 +135,12 @@ def _build_step(raw: Any, params: dict, label: str, screenshot_dir: Optional[Pat
     return builders[kind]()
 
 
-def _page_action(page: dict, params: dict, screenshot_dir: Optional[Path]) -> PageAction:
+def _page_action(page: dict, params: dict, screenshot_dir: Optional[Path], verify_timeout: float) -> PageAction:
     name = page.get("name", "?")
     matchers = {k: page[k] for k in URL_MATCHERS if k in page}
     if len(matchers) != 1:
         raise SiteError(f"page {name!r}: needs exactly one of {', '.join(URL_MATCHERS)}")
-    steps = [_build_step(raw, params, f"{name}_step{i}", screenshot_dir)
+    steps = [_build_step(raw, params, f"{name}_step{i}", screenshot_dir, verify_timeout)
              for i, raw in enumerate(page.get("steps") or [], start=1)]
     return PageAction(steps=steps, order=int(page.get("order", 100)), **matchers)
 
@@ -143,7 +149,7 @@ def build_action(site: Site, params: dict, screenshot_dir: Optional[Path] = None
     missing = [p for p in site.params if p not in params]
     if missing:
         raise SiteError(f"site {site.name!r}: missing params {', '.join(missing)}")
-    actions = [_page_action(page, params, screenshot_dir) for page in site.pages]
+    actions = [_page_action(page, params, screenshot_dir, site.verify_timeout) for page in site.pages]
     if site.unexpected_page is not None:
         grace = float(site.unexpected_page.get("grace_seconds", DEFAULT_GRACE_SECONDS))
         actions.append(PageAction(url_any=True, order=CATCH_ALL_ORDER, steps=[

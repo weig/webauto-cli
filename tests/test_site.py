@@ -14,6 +14,7 @@ SITE_YAML = textwrap.dedent(
     name: demo
     start_url: https://h/logon
     params: [USERNAME, PASSWORD]
+    verify_timeout: 0.1
     unexpected_page: {grace_seconds: 0.05}
     on_failure:
       - click_if_unique: "//a[@id='logout']"
@@ -72,6 +73,15 @@ class TestLoad:
             run_site(site_file, {"USERNAME": "u"}, handle=handle)
 
         assert handle.calls == []
+
+    def test_verify_timeout_defaults_to_ten_seconds_and_is_configurable(self, tmp_path) -> None:
+        path = tmp_path / "t.yaml"
+        without = SITE_YAML.replace("verify_timeout: 0.1\n", "")
+        path.write_text(without)
+        assert load_site(path).verify_timeout == 10.0
+
+        path.write_text("verify_timeout: 3\n" + without)
+        assert load_site(path).verify_timeout == 3.0
 
     def test_catch_all_page_is_added_last_with_high_order(self, site_file) -> None:
         action = build_action(load_site(site_file), {"USERNAME": "u", "PASSWORD": "p"})
